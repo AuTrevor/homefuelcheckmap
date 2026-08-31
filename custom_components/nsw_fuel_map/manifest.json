@@ -1,0 +1,12 @@
+{
+  "domain": "nsw_fuel_map",
+  "name": "NSW Fuel Map",
+  "codeowners": ["@autrevor"],
+  "config_flow": true,
+  "documentation": "https://github.com/autrevor/homefuelcheckmap",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/autrevor/homefuelcheckmap/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

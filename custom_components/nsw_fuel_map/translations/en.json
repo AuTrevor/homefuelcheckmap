@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "NSW Fuel Map",
+        "description": "Enter your NSW FuelCheck API credentials from apinsw.onegov.nsw.gov.au. Stations are searched around your Home Assistant home location ({latitude}, {longitude}).",
+        "data": {
+          "api_key": "API key",
+          "api_secret": "API secret",
+          "fuel_type": "Fuel type",
+          "radius": "Search radius",
+          "update_interval": "Update interval"
+        },
+        "data_description": {
+          "radius": "How far from home to look for stations.",
+          "update_interval": "How often to fetch prices. FuelCheck data changes daily."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate NSW Fuel Map",
+        "description": "Your FuelCheck credentials were rejected. Enter them again.",
+        "data": {
+          "api_key": "API key",
+          "api_secret": "API secret"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid authentication. Check your API key and secret.",
+      "cannot_connect": "Failed to connect to the NSW FuelCheck API.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This fuel type is already configured.",
+      "reauth_successful": "Reauthentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "NSW Fuel Map options",
+        "data": {
+          "fuel_type": "Fuel type",
+          "radius": "Search radius",
+          "update_interval": "Update interval"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Another NSW Fuel Map entry already tracks this fuel type."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh prices",
+      "description": "Immediately re-fetch fuel prices from the NSW FuelCheck API."
+    }
+  }
+}

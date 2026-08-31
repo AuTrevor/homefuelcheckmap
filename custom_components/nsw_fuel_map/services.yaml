@@ -1,0 +1,5 @@
+refresh:
+  name: Refresh prices
+  description: >-
+    Immediately re-fetch fuel prices from the NSW FuelCheck API for every
+    configured entry, without waiting for the scheduled update.
