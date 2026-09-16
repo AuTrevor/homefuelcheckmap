@@ -42,44 +42,47 @@ def mock_config_entry() -> MockConfigEntry:
 
 
 @pytest.fixture
-def nearby_payload() -> dict:
-    """A representative /prices/nearby response."""
-    # Shape and types copied from a real response captured by scripts/smoke_test.py:
-    # note that `code`/`stationcode` come back as integers, not strings.
+def prices_payload() -> dict:
+    """A representative /fuel/prices response, trimmed to a few stations.
+
+    Shape and types copied from a real response: the statewide feed sends station
+    codes as strings and carries no `distance`, so the client computes it.
+    """
     return {
         "stations": [
             {
                 "brandid": "1-GFYV-2",
                 "stationid": "1-32D56EQ",
                 "brand": "Budget",
-                "code": 16924,
+                "code": "16924",
                 "name": "Budget Petrol Chippendale",
                 "address": "66-70 Regent Street, CHIPPENDALE NSW 2008",
-                "location": {
-                    "distance": 2.22,
-                    "latitude": -33.8878,
-                    "longitude": 151.201744,
-                },
+                "location": {"latitude": -33.8878, "longitude": 151.201744},
                 "state": "NSW",
             },
             {
                 "brandid": "1-2Y2-6",
                 "stationid": "1-32D56ER",
                 "brand": "7-Eleven",
-                "code": 20202,
+                "code": "20202",
                 "name": "7-Eleven Homebush",
                 "address": "1 Parramatta Rd, HOMEBUSH NSW 2140",
-                "location": {
-                    "distance": 4.1,
-                    "latitude": -33.8650,
-                    "longitude": 151.0800,
-                },
+                "location": {"latitude": -33.8650, "longitude": 151.0800},
+                "state": "NSW",
+            },
+            {
+                # Broken Hill: in the feed, but ~900km from the search point.
+                "brand": "Shell",
+                "code": "30001",
+                "name": "Shell Broken Hill",
+                "address": "Argent St, BROKEN HILL NSW 2880",
+                "location": {"latitude": -31.9583, "longitude": 141.4675},
                 "state": "NSW",
             },
         ],
         "prices": [
             {
-                "stationcode": 16924,
+                "stationcode": "16924",
                 "fueltype": "U91",
                 "price": 195.7,
                 "lastupdated": "2026-08-02 10:48:51",
@@ -87,7 +90,7 @@ def nearby_payload() -> dict:
                 "state": "NSW",
             },
             {
-                "stationcode": 20202,
+                "stationcode": "20202",
                 "fueltype": "U91",
                 "price": 189.9,
                 "lastupdated": "2026-08-02 07:30:00",
@@ -96,10 +99,18 @@ def nearby_payload() -> dict:
             },
             {
                 # A different fuel type at a station we already have; must be ignored.
-                "stationcode": 16924,
+                "stationcode": "16924",
                 "fueltype": "P98",
                 "price": 210.9,
                 "lastupdated": "2026-08-02 10:48:51",
+                "priceunit": "litre",
+                "state": "NSW",
+            },
+            {
+                "stationcode": "30001",
+                "fueltype": "U91",
+                "price": 205.9,
+                "lastupdated": "2026-08-02 09:00:00",
                 "priceunit": "litre",
                 "state": "NSW",
             },

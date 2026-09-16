@@ -29,7 +29,7 @@ def _station(code: str, price: float | None, **kwargs) -> Station:
 
 async def _setup(hass, entry, stations: list[Station]):
     entry.add_to_hass(hass)
-    with patch(f"{CLIENT}.async_get_nearby_stations", new=AsyncMock(return_value=stations)):
+    with patch(f"{CLIENT}.async_get_stations_in_radius", new=AsyncMock(return_value=stations)):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -157,7 +157,7 @@ async def test_search_uses_current_home_location(hass, mock_config_entry) -> Non
 
     mock_config_entry.add_to_hass(hass)
     fetch = AsyncMock(return_value=[_station("101", 172.9)])
-    with patch(f"{CLIENT}.async_get_nearby_stations", new=fetch):
+    with patch(f"{CLIENT}.async_get_stations_in_radius", new=fetch):
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -12,9 +13,11 @@ from datetime import datetime, timedelta
 import aiohttp
 
 from .const import (
+    ALL_PRICES_PATH,
     BASE_URL,
     DEFAULT_PRICE_UNIT,
-    NEARBY_PATH,
+    EARTH_RADIUS_KM,
+    FUEL_TYPE_UNITS,
     PRICE_UNITS,
     TIMESTAMP_FORMAT,
     TOKEN_EXPIRY_MARGIN,
@@ -23,7 +26,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+# The statewide price list is ~1.7 MiB, so allow more headroom than a token call.
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=60)
 
 # The API sits behind Cloudflare, which rejects aiohttp's default user agent with
 # "error code: 1010" before the request ever reaches the gateway.
@@ -141,33 +145,25 @@ class FuelCheckClient:
         """Raise if the configured credentials cannot obtain a token."""
         await self.async_get_token(force=True)
 
-    async def async_get_nearby_stations(
+    async def async_get_stations_in_radius(
         self, latitude: float, longitude: float, radius: int, fuel_type: str
     ) -> list[Station]:
-        """Return stations within `radius` km, each with its current price."""
-        body = {
-            "fueltype": fuel_type,
-            "brand": [],
-            "namedlocation": "",
-            "latitude": str(latitude),
-            "longitude": str(longitude),
-            "radius": str(radius),
-            "sortby": "price",
-            "sortascending": "true",
-        }
+        """Return stations within `radius` km of the point, with their prices.
 
-        payload = await self._post(NEARBY_PATH, body)
-        return self._parse_stations(payload, fuel_type)
+        Fetches every price in NSW and filters here rather than asking the API for
+        nearby stations; see ALL_PRICES_PATH in const.py for why.
+        """
+        payload = await self._get(ALL_PRICES_PATH)
+        return self._parse_stations(payload, fuel_type, latitude, longitude, radius)
 
-    async def _post(self, path: str, body: dict) -> dict:
-        """POST with a valid token, retrying once against a stale-token 401."""
+    async def _get(self, path: str) -> dict:
+        """GET with a valid token, retrying once against a stale-token 401."""
         token = await self.async_get_token()
 
         for attempt in (1, 2):
             try:
-                async with self._session.post(
+                async with self._session.get(
                     f"{BASE_URL}{path}",
-                    json=body,
                     headers=self._headers(token),
                     timeout=REQUEST_TIMEOUT,
                 ) as resp:
@@ -196,15 +192,26 @@ class FuelCheckClient:
         raise FuelCheckApiError(f"FuelCheck request to {path} could not be completed")
 
     @staticmethod
-    def _parse_stations(payload: dict, fuel_type: str) -> list[Station]:
-        """Join the response's `stations` and `prices` arrays on station code."""
+    def _parse_stations(
+        payload: dict,
+        fuel_type: str,
+        latitude: float,
+        longitude: float,
+        radius: float,
+    ) -> list[Station]:
+        """Join `stations` to `prices` on code, keeping those within the radius.
+
+        Stations with no price for `fuel_type` are dropped: the statewide feed
+        includes EV chargers, LPG-only sites and motels that would otherwise
+        become blank markers.
+        """
         prices_by_code: dict[str, dict] = {}
         for price in payload.get("prices") or []:
-            # A station can list several fuel types even when we asked for one.
-            if price.get("fueltype") and price["fueltype"] != fuel_type:
+            # The feed carries every fuel type for every station.
+            if price.get("fueltype") != fuel_type:
                 continue
-            # The API returns station codes as integers here and as integers in
-            # `stations` too; normalise to str so the join is type-safe either way.
+            # Station codes come back as ints on some endpoints and strs on
+            # others; normalise so the join is type-safe either way.
             code = str(price.get("stationcode") or "")
             if code:
                 prices_by_code[code] = price
@@ -212,19 +219,25 @@ class FuelCheckClient:
         stations: list[Station] = []
         for raw in payload.get("stations") or []:
             code = str(raw.get("code") or "")
+            price_entry = prices_by_code.get(code)
+            if not code or price_entry is None:
+                continue
+
             location = raw.get("location") or {}
-            latitude = location.get("latitude")
-            longitude = location.get("longitude")
-            if not code or latitude is None or longitude is None:
+            station_lat = _as_float(location.get("latitude"))
+            station_lon = _as_float(location.get("longitude"))
+            if station_lat is None or station_lon is None:
                 # Without coordinates there is nothing to put on the map.
                 continue
 
-            price_entry = prices_by_code.get(code, {})
-            raw_price = price_entry.get("price")
+            distance = _haversine_km(latitude, longitude, station_lat, station_lon)
+            if distance > radius:
+                continue
+
             try:
-                price = float(raw_price) if raw_price is not None else None
-            except (TypeError, ValueError):
-                price = None
+                price = float(price_entry["price"])
+            except (KeyError, TypeError, ValueError):
+                continue
 
             stations.append(
                 Station(
@@ -232,19 +245,33 @@ class FuelCheckClient:
                     name=raw.get("name") or code,
                     brand=raw.get("brand") or "",
                     address=raw.get("address") or "",
-                    latitude=float(latitude),
-                    longitude=float(longitude),
-                    distance=_as_float(location.get("distance")),
+                    latitude=station_lat,
+                    longitude=station_lon,
+                    distance=round(distance, 2),
                     price=price,
+                    # Prefer the denominator the API sends, but this feed omits
+                    # it, so fall back to what the fuel type implies.
                     price_unit=PRICE_UNITS.get(
                         str(price_entry.get("priceunit", "")).lower(),
-                        DEFAULT_PRICE_UNIT,
+                        FUEL_TYPE_UNITS.get(fuel_type, DEFAULT_PRICE_UNIT),
                     ),
                     last_updated=price_entry.get("lastupdated"),
                 )
             )
 
         return stations
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km between two points."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = phi2 - phi1
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
 def _as_float(value: object) -> float | None:

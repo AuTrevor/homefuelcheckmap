@@ -40,6 +40,12 @@ Go to **Settings → Devices & Services → Add Integration → NSW Fuel Map** a
 The search is centred on the home coordinates in **Settings → System → General**, so
 make sure those are correct.
 
+Prices come from FuelCheck's statewide feed and the radius is applied locally, so it
+means exactly what it says. The API's own `/prices/nearby` endpoint is not used: for
+some locations it returns only the single closest station regardless of the radius
+asked for, and it under-reports everywhere (at Sydney CBD it returns 31 stations
+within 10km where the statewide feed has 428).
+
 To track more than one fuel type, add the integration again and pick a different type.
 
 Radius, interval, and fuel type can all be changed later via **Configure** on the entry.

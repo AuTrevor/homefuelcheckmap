@@ -8,7 +8,16 @@ DOMAIN: Final = "nsw_fuel_map"
 
 BASE_URL: Final = "https://api.onegov.nsw.gov.au"
 TOKEN_PATH: Final = "/oauth/client_credential/accesstoken"
-NEARBY_PATH: Final = "/FuelPriceCheck/v2/fuel/prices/nearby"
+# Every current price in NSW (~3,300 stations, ~1.7 MiB, under a second). The
+# /prices/nearby endpoint is not trustworthy: for some locations it silently
+# returns only the single closest station no matter the radius asked for —
+# verified at -35.422,149.236, where it reports 1 station while this endpoint
+# shows 19 within 10km. Fetching everything and filtering here also means the
+# radius means exactly what it says.
+ALL_PRICES_PATH: Final = "/FuelPriceCheck/v2/fuel/prices"
+
+# Mean Earth radius, for the great-circle distance from home to each station.
+EARTH_RADIUS_KM: Final = 6371.0088
 
 # The API gateway rejects requests whose `requesttimestamp` is not in this exact
 # shape. Verified against the live API by scripts/smoke_test.py.
@@ -66,8 +75,8 @@ FUEL_TYPES: Final[dict[str, str]] = {
 
 DEFAULT_FUEL_TYPE: Final = "U91"
 
-# The API reports the denominator only ("litre"), while prices are in cents. Map
-# to a display unit that says what the number actually is.
+# Where the API reports a denominator ("litre"), it says only that, while prices
+# are in cents. Map to a display unit that says what the number actually is.
 PRICE_UNITS: Final[dict[str, str]] = {
     "litre": "¢/L",
     "kg": "¢/kg",
@@ -75,3 +84,14 @@ PRICE_UNITS: Final[dict[str, str]] = {
 }
 
 DEFAULT_PRICE_UNIT: Final = "¢/L"
+
+# The statewide /fuel/prices feed omits `priceunit` entirely — it is absent from
+# all ~10,500 price entries — so the unit has to come from the fuel type. Only
+# the gases and electricity differ; road fuels and automotive LPG sell by the
+# litre.
+FUEL_TYPE_UNITS: Final[dict[str, str]] = {
+    "EV": "¢/kWh",
+    "H2": "¢/kg",
+    "CNG": "¢/kg",
+    "LNG": "¢/kg",
+}

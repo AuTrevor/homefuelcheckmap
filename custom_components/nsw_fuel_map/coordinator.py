@@ -61,7 +61,7 @@ class NswFuelCoordinator(DataUpdateCoordinator[dict[str, Station]]):
         longitude = self.hass.config.longitude
 
         try:
-            stations = await self.client.async_get_nearby_stations(
+            stations = await self.client.async_get_stations_in_radius(
                 latitude, longitude, self.radius, self.fuel_type
             )
         except FuelCheckAuthError as err:

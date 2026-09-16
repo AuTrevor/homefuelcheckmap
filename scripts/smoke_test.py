@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import sys
 import urllib.error
 import urllib.parse
@@ -136,33 +137,62 @@ def main() -> None:
     else:
         print(lovs)
 
-    # Nearby prices: the shape the coordinator parses.
-    status, nearby = request(
-        f"{BASE_URL}/FuelPriceCheck/v2/fuel/prices/nearby",
-        api_headers(api_key, token, fmt),
-        {
-            "fueltype": TEST_FUELTYPE,
-            "brand": [],
-            "namedlocation": "",
-            "latitude": str(TEST_LAT),
-            "longitude": str(TEST_LON),
-            "radius": str(TEST_RADIUS),
-            "sortby": "price",
-            "sortascending": "true",
-        },
+    # Statewide prices: the shape the coordinator parses.
+    status, all_prices = request(
+        f"{BASE_URL}/FuelPriceCheck/v2/fuel/prices", api_headers(api_key, token, fmt)
     )
-    print(f"\n--- nearby prices: HTTP {status}")
+    print(f"\n--- all prices: HTTP {status}")
     if status != 200:
-        print(nearby)
+        print(all_prices)
         sys.exit(1)
-    print("top-level keys:", list(nearby.keys()))
-    stations = nearby.get("stations", [])
-    prices = nearby.get("prices", [])
+    print("top-level keys:", list(all_prices.keys()))
+    stations = all_prices.get("stations", [])
+    prices = all_prices.get("prices", [])
     print(f"stations: {len(stations)}  prices: {len(prices)}")
     if stations:
         print("sample station:", json.dumps(stations[0], indent=2))
     if prices:
         print("sample price:", json.dumps(prices[0], indent=2))
+
+    # Why the integration doesn't use /prices/nearby: for some points it returns
+    # only the single closest station, whatever radius is asked for. Compare the
+    # two endpoints so a future fix to the API is easy to notice.
+    print("\n--- /prices/nearby vs local filtering")
+    for lat, lon, label in ((TEST_LAT, TEST_LON, "Sydney CBD"), (-35.422, 149.236, "Googong")):
+        for radius in (10, 50):
+            status, nearby = request(
+                f"{BASE_URL}/FuelPriceCheck/v2/fuel/prices/nearby",
+                api_headers(api_key, token, fmt),
+                {
+                    "fueltype": TEST_FUELTYPE,
+                    "brand": [],
+                    "namedlocation": "",
+                    "latitude": str(lat),
+                    "longitude": str(lon),
+                    "radius": str(radius),
+                    "sortby": "price",
+                    "sortascending": "true",
+                },
+            )
+            n = len(nearby.get("stations", [])) if status == 200 else f"HTTP {status}"
+            local = sum(
+                1
+                for s in stations
+                if (loc := s.get("location"))
+                and loc.get("latitude") is not None
+                and _distance_km(lat, lon, loc["latitude"], loc["longitude"]) <= radius
+            )
+            print(f"  {label:<11} {radius:>2}km: nearby={n:<5} local={local}")
+
+
+def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance, mirroring api._haversine_km."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    a = (
+        math.sin((phi2 - phi1) / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    )
+    return 2 * 6371.0088 * math.asin(math.sqrt(a))
 
 
 if __name__ == "__main__":
