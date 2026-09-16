@@ -56,6 +56,53 @@ async def test_markers_created_per_station(hass, mock_config_entry) -> None:
     assert marker.attributes["fuel_type"] == "Unleaded 91"
 
 
+async def test_marker_entity_ids_do_not_embed_the_price(hass, mock_config_entry) -> None:
+    """Entity IDs are permanent, so they key off the station, not its price."""
+    await _setup(
+        hass,
+        mock_config_entry,
+        [_station("101", 172.9, name="Costco Auburn"), _station("202", 189.9, name="Costco Auburn")],
+    )
+
+    ids = sorted(s.entity_id for s in hass.states.async_all("geo_location"))
+    assert ids == ["geo_location.costco_auburn_101", "geo_location.costco_auburn_202"]
+    # The price still shows on the map, via the friendly name.
+    names = {s.attributes["friendly_name"] for s in hass.states.async_all("geo_location")}
+    assert names == {"Costco Auburn 172.9", "Costco Auburn 189.9"}
+
+
+async def test_price_sensor_per_station(hass, mock_config_entry) -> None:
+    """Each station gets a sensor whose state is its price, so history is price."""
+    await _setup(hass, mock_config_entry, [_station("101", 172.9), _station("202", 189.9)])
+
+    sensors = [
+        s
+        for s in hass.states.async_all("sensor")
+        if s.attributes.get("station_code") == "101"
+    ]
+    # Both the per-station sensor and the cheapest sensor point at station 101.
+    station_sensor = next(s for s in sensors if "cheapest" not in s.entity_id)
+
+    assert float(station_sensor.state) == 172.9
+    assert station_sensor.attributes["state_class"] == "measurement"
+    assert station_sensor.attributes["unit_of_measurement"] == "litre"
+    assert station_sensor.attributes["latitude"] == -33.86
+    assert station_sensor.attributes["longitude"] == 151.2
+    assert station_sensor.attributes["distance"] == 2.0
+
+
+async def test_price_sensor_unavailable_without_a_price(hass, mock_config_entry) -> None:
+    """A station with no price for the fuel type reports unavailable, not 0."""
+    await _setup(hass, mock_config_entry, [_station("101", None)])
+
+    station_sensor = next(
+        s
+        for s in hass.states.async_all("sensor")
+        if "cheapest" not in s.entity_id
+    )
+    assert station_sensor.state == "unavailable"
+
+
 async def test_cheapest_sensor_picks_lowest_price(hass, mock_config_entry) -> None:
     """The sensor state is the minimum price, with that station's details."""
     await _setup(
@@ -64,14 +111,9 @@ async def test_cheapest_sensor_picks_lowest_price(hass, mock_config_entry) -> No
         [_station("101", 189.9), _station("202", 172.9), _station("303", 181.5)],
     )
 
-    state = hass.states.get("sensor.nsw_fuel_map_unleaded_91_cheapest_unleaded_91")
-    if state is None:
-        # Entity id depends on device naming; find it by unique attributes instead.
-        state = next(
-            s
-            for s in hass.states.async_all("sensor")
-            if s.attributes.get("station_code") is not None
-        )
+    state = next(
+        s for s in hass.states.async_all("sensor") if "cheapest" in s.entity_id
+    )
 
     assert float(state.state) == 172.9
     assert state.attributes["station_code"] == "202"
@@ -83,9 +125,7 @@ async def test_cheapest_sensor_ignores_priceless_stations(hass, mock_config_entr
     await _setup(hass, mock_config_entry, [_station("101", None), _station("202", 199.9)])
 
     state = next(
-        s
-        for s in hass.states.async_all("sensor")
-        if s.attributes.get("station_code") is not None
+        s for s in hass.states.async_all("sensor") if "cheapest" in s.entity_id
     )
     assert float(state.state) == 199.9
     assert state.attributes["station_code"] == "202"

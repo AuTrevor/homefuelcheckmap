@@ -60,11 +60,25 @@ Each marker is named `<station> <price>`, e.g. `Costco Auburn 172.9`.
 
 ## Entities
 
-- `geo_location.*` — one per station in range. State is distance from home in km;
-  attributes include `price`, `station_name`, `brand`, `address`, `station_code`,
-  `fuel_type`, and `last_updated`.
+- `geo_location.*` — one per station in range, for the map. State is distance from
+  home in km (Home Assistant fixes this for geo_location entities and it can't be
+  changed); attributes include `price`, `station_name`, `brand`, `address`,
+  `station_code`, `fuel_type`, and `last_updated`.
+- `sensor.*` — one per station, state is **that station's price**. Use these for
+  history graphs and long-term statistics; the marker's history would only ever
+  show distance. Attributes include `distance`, `latitude`, and `longitude`.
 - `sensor.*_cheapest_*` — lowest price in range, with the winning station's details
   as attributes plus `stations_in_range`.
+
+### Price history
+
+```yaml
+type: history-graph
+hours_to_show: 336
+entities:
+  - sensor.nsw_fuel_map_unleaded_91_costco_auburn
+  - sensor.nsw_fuel_map_unleaded_91_cheapest_unleaded_91
+```
 
 Stations that leave the radius become `unavailable` rather than being deleted, so a
 station near the edge of your radius doesn't churn the entity registry.

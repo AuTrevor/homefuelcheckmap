@@ -41,6 +41,8 @@ ATTR_FUEL_TYPE: Final = "fuel_type"
 ATTR_PRICE: Final = "price"
 ATTR_LAST_UPDATED: Final = "last_updated"
 ATTR_DISTANCE: Final = "distance"
+ATTR_LATITUDE: Final = "latitude"
+ATTR_LONGITUDE: Final = "longitude"
 
 # Fuel type codes and names taken verbatim from /FuelCheckRefData/v2/fuel/lovs.
 # The API also publishes combined codes (E10-U91, P95-P98, DL-PDL) for "either"

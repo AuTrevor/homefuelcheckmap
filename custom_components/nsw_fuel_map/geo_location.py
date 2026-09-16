@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.geo_location import GeolocationEvent
+from homeassistant.components.geo_location import ENTITY_ID_FORMAT, GeolocationEvent
 from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -69,6 +70,17 @@ class NswFuelStationMarker(CoordinatorEntity[NswFuelCoordinator], GeolocationEve
         super().__init__(coordinator)
         self._station_code = station_code
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{station_code}"
+        # The friendly name carries the price so the map card can show it, but
+        # entity IDs are permanent — derived from the name, they would be stamped
+        # with whatever the price happened to be at creation
+        # (geo_location.costco_auburn_172_9). Pin the ID to the station instead.
+        # Setting entity_id explicitly skips the registry's collision handling, so
+        # the station code is included to keep same-named stations apart.
+        station = (coordinator.data or {}).get(station_code)
+        name = f"{station.name} {station_code}" if station else station_code
+        self.entity_id = async_generate_entity_id(
+            ENTITY_ID_FORMAT, name, hass=coordinator.hass
+        )
 
     @property
     def _station(self):
