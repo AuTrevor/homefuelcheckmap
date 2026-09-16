@@ -54,6 +54,26 @@ already tracks that type, the form says so rather than creating a clash.
 
 ## Adding the map card
 
+Use the per-station **price sensors** with `label_mode: state`, so each marker is
+labelled with its price and clicking one opens an entity whose history is price:
+
+```yaml
+type: map
+label_mode: state
+auto_fit: true
+entities:
+  - sensor.nsw_fuel_map_unleaded_91_costco_auburn
+  - sensor.nsw_fuel_map_unleaded_91_bp_homebush
+  # ...one line per station you care about
+```
+
+The sensors expose `latitude`/`longitude` attributes for exactly this purpose.
+Entity IDs follow `sensor.nsw_fuel_map_<fuel type>_<station name>`; the full list
+is under the integration's device in Settings → Devices & Services.
+
+The `geo_location` markers are the alternative, and pick up new stations without
+editing the card:
+
 ```yaml
 type: map
 geo_location_sources:
@@ -62,7 +82,10 @@ auto_fit: true
 hours_to_show: 0
 ```
 
-Each marker is named `<station> <price>`, e.g. `Costco Auburn 172.9`.
+They carry the price in the marker name (`Costco Auburn 172.9`), but Home
+Assistant labels geo_location markers with the name's initials and fixes their
+state — and therefore their history — to distance from home. If you want price on
+the label or in the history, use the sensor card above.
 
 ## Entities
 
